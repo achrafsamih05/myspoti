@@ -5,11 +5,14 @@ import MyspotiDomain
 /// Errors encountered during PKCE authorization or code exchange.
 public enum PKCEError: Error, LocalizedError, Sendable, Equatable {
     case randomGenerationFailed(OSStatus)
+    case invalidByteCount(expected: Int, actual: Int)
 
     public var errorDescription: String? {
         switch self {
         case .randomGenerationFailed(let status):
             return "Failed to generate cryptographically secure random bytes (OSStatus \(status))."
+        case .invalidByteCount(let expected, let actual):
+            return "Invalid random bytes count: expected \(expected), got \(actual)."
         }
     }
 }
@@ -26,32 +29,30 @@ public final class PKCECoordinator: Sendable {
 
     /// Generates a high-entropy cryptographically random 32-byte string (43 characters when base64url-encoded).
     ///
-    /// - Parameter randomBytesGenerator: Optional closure for generating random bytes. Defaults to `SecRandomCopyBytes`.
+    /// - Parameter randomBytesGenerator: Optional throwing closure for generating random bytes. Defaults to `SecRandomCopyBytes`.
     /// - Returns: A base64url-encoded string of 32 random bytes without padding.
-    /// - Throws: `PKCEError.randomGenerationFailed` if random number generation fails. Never falls back to predictable zeros.
+    /// - Throws: `PKCEError.randomGenerationFailed` if random number generation fails, or `PKCEError.invalidByteCount`. Never falls back to predictable zeros.
     public func generateCodeVerifier(
-        randomBytesGenerator: ((Int) -> Result<[UInt8], OSStatus>)? = nil
+        randomBytesGenerator: ((Int) throws -> [UInt8])? = nil
     ) throws -> String {
         let count = 32
-        let result: Result<[UInt8], OSStatus>
+        let bytes: [UInt8]
         if let customGenerator = randomBytesGenerator {
-            result = customGenerator(count)
+            bytes = try customGenerator(count)
         } else {
             var buffer = [UInt8](repeating: 0, count: count)
             let status = SecRandomCopyBytes(kSecRandomDefault, count, &buffer)
-            if status == errSecSuccess {
-                result = .success(buffer)
-            } else {
-                result = .failure(status)
+            guard status == errSecSuccess else {
+                throw PKCEError.randomGenerationFailed(status)
             }
+            bytes = buffer
         }
 
-        switch result {
-        case .success(let bytes):
-            return Data(bytes).base64URLEncodedString()
-        case .failure(let status):
-            throw PKCEError.randomGenerationFailed(status)
+        guard bytes.count == count else {
+            throw PKCEError.invalidByteCount(expected: count, actual: bytes.count)
         }
+
+        return Data(bytes).base64URLEncodedString()
     }
 
     /// Derives the S256 code_challenge from code_verifier using SHA-256.

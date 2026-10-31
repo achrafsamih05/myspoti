@@ -48,7 +48,7 @@ final class MyspotiTests: XCTestCase {
 
         XCTAssertThrowsError(
             try coordinator.generateCodeVerifier(randomBytesGenerator: { _ in
-                .failure(simulatedFailureStatus)
+                throw PKCEError.randomGenerationFailed(simulatedFailureStatus)
             }),
             "Should throw PKCEError when random generation fails"
         ) { error in
@@ -58,6 +58,26 @@ final class MyspotiTests: XCTestCase {
             }
             XCTAssertEqual(pkceError, PKCEError.randomGenerationFailed(simulatedFailureStatus))
         }
+    }
+
+    func testPKCECodeVerifierInvalidByteCountHandling() {
+        let coordinator = PKCECoordinator(clientId: "test_client_id")
+
+        XCTAssertThrowsError(
+            try coordinator.generateCodeVerifier(randomBytesGenerator: { _ in
+                [UInt8](repeating: 1, count: 16)
+            }),
+            "Should throw PKCEError.invalidByteCount when byte count is insufficient"
+        ) { error in
+            XCTAssertEqual(error as? PKCEError, PKCEError.invalidByteCount(expected: 32, actual: 16))
+        }
+    }
+
+    func testPKCECodeVerifierDeterministicCustomBytes() throws {
+        let coordinator = PKCECoordinator(clientId: "test_client_id")
+        let fixedBytes = [UInt8](repeating: 0x41, count: 32)
+        let verifier = try coordinator.generateCodeVerifier(randomBytesGenerator: { _ in fixedBytes })
+        XCTAssertEqual(verifier, "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE")
     }
 
     // MARK: - OAuth Authorization URL Construction & Validation
