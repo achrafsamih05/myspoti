@@ -1,0 +1,60 @@
+workflows:
+  ios-build-and-test:
+    name: Myspoti iOS – Build and Test
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: 15.4
+      cocoapods: default
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen
+      - name: Generate Xcode Project via XcodeGen
+        script: |
+          cd ios
+          xcodegen generate
+      - name: Resolve Swift Package Dependencies
+        script: |
+          cd ios
+          xcodebuild -resolvePackageDependencies -project Myspoti.xcodeproj -scheme Myspoti
+      - name: Execute Unit Test Suite
+        script: |
+          cd ios
+          xcodebuild test \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build for Generic iOS Device
+        script: |
+          cd ios
+          xcodebuild build \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build and Archive Release Candidate
+        script: |
+          cd ios
+          xcodebuild archive \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -configuration Release \
+            -archivePath build/Myspoti.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Package Payload into Sideloadable .ipa
+        script: |
+          cd ios
+          mkdir -p build/Payload
+          cp -r build/Myspoti.xcarchive/Products/Applications/Myspoti.app build/Payload/
+          cd build
+          zip -r Myspoti.ipa Payload
+    artifacts:
+      - ios/build/Myspoti.ipa
+      - ios/build/Myspoti.xcarchive
+

@@ -1,0 +1,75 @@
+name: Myspoti
+options:
+  bundleIdPrefix: app.myspoti
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "15.4"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    ENABLE_PREVIEWS: YES
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  MyspotiDomain:
+    path: Packages/MyspotiDomain
+  MyspotiNetwork:
+    path: Packages/MyspotiNetwork
+  MyspotiAudio:
+    path: Packages/MyspotiAudio
+  MyspotiUI:
+    path: Packages/MyspotiUI
+
+targets:
+  Myspoti:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/MyspotiApp
+    dependencies:
+      - package: MyspotiDomain
+      - package: MyspotiNetwork
+      - package: MyspotiAudio
+      - package: MyspotiUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.myspoti.ios
+        INFOPLIST_FILE: Sources/MyspotiApp/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+    entitlements:
+      path: Sources/MyspotiApp/Myspoti.entitlements
+
+  MyspotiTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/MyspotiTests
+    dependencies:
+      - target: Myspoti
+      - package: MyspotiDomain
+      - package: MyspotiNetwork
+      - package: MyspotiAudio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.myspoti.ios.tests
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Myspoti.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Myspoti"
+
+schemes:
+  Myspoti:
+    build:
+      targets:
+        Myspoti: all
+    test:
+      targets:
+        - MyspotiTests
+    run:
+      config: Debug
+    archive:
+      config: Release
