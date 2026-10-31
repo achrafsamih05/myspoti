@@ -61,8 +61,8 @@ settings:
 packages:
   MyspotiDomain:
     path: Packages/MyspotiDomain
-  MyspotiSpotify:
-    path: Packages/MyspotiSpotify
+  MyspotiNetwork:
+    path: Packages/MyspotiNetwork
   MyspotiAudio:
     path: Packages/MyspotiAudio
   MyspotiUI:
@@ -76,7 +76,7 @@ targets:
       - path: Sources/MyspotiApp
     dependencies:
       - package: MyspotiDomain
-      - package: MyspotiSpotify
+      - package: MyspotiNetwork
       - package: MyspotiAudio
       - package: MyspotiUI
     settings:
@@ -97,8 +97,8 @@ Codemagic compiles the app on cloud Apple Silicon macOS machines.
 
 ```yaml
 workflows:
-  ios-build:
-    name: Build Myspoti iOS App (.ipa)
+  ios-build-and-test:
+    name: Myspoti iOS – Build and Test
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -108,33 +108,54 @@ workflows:
       - name: Install XcodeGen
         script: |
           brew install xcodegen
-      - name: Generate Xcode Project
+      - name: Generate Xcode Project via XcodeGen
         script: |
           cd ios
           xcodegen generate
-      - name: Resolve Swift Packages
+      - name: Resolve Swift Package Dependencies
         script: |
           cd ios
           xcodebuild -resolvePackageDependencies -project Myspoti.xcodeproj -scheme Myspoti
-      - name: Build and Archive
+      - name: Execute Unit Test Suite
+        script: |
+          cd ios
+          xcodebuild test \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build for Generic iOS Device
+        script: |
+          cd ios
+          xcodebuild build \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build and Archive Release Candidate
         script: |
           cd ios
           xcodebuild archive \
             -project Myspoti.xcodeproj \
             -scheme Myspoti \
             -configuration Release \
+            -destination 'generic/platform=iOS' \
             -archivePath build/Myspoti.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
-      - name: Package Payload into .ipa
+      - name: Package Payload into Sideloadable .ipa
         script: |
           cd ios
           mkdir -p build/Payload
           cp -r build/Myspoti.xcarchive/Products/Applications/Myspoti.app build/Payload/
           cd build
-          zip -r Myspoti.ipa Payload
+          zip -qr Myspoti.ipa Payload
     artifacts:
       - ios/build/Myspoti.ipa
+      - ios/build/Myspoti.xcarchive
 ```
 
 ---
