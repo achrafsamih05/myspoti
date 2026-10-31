@@ -3,6 +3,7 @@ import re
 import sys
 import base64
 import hashlib
+import urllib.parse
 
 def test_structure():
     print("[1] Verifying iOS file and directory structure...")
@@ -88,8 +89,29 @@ def test_pkce_logic():
     assert challenge == expected_challenge, f"PKCE S256 mismatch! Expected {expected_challenge}, got {challenge}"
     print(f"PASSED: PKCE test vector verified ({challenge}).")
 
+def test_form_url_encoding():
+    print("[3] Validating application/x-www-form-urlencoded logic...")
+    def encode_form_field(s):
+        return urllib.parse.quote(s, safe="-_.~").replace("%20", "+")
+    
+    assert encode_form_field("hello world") == "hello+world"
+    assert encode_form_field("myspoti://callback") == "myspoti%3A%2F%2Fcallback"
+    assert encode_form_field("test+plus") == "test%2Bplus"
+    assert encode_form_field("key=value&foo=bar") == "key%3Dvalue%26foo%3Dbar"
+    
+    params = {
+        "client_id": "test client",
+        "grant_type": "authorization_code",
+        "redirect_uri": "myspoti://callback"
+    }
+    encoded_pairs = [f"{encode_form_field(k)}={encode_form_field(v)}" for k, v in sorted(params.items())]
+    body = "&".join(encoded_pairs)
+    expected = "client_id=test+client&grant_type=authorization_code&redirect_uri=myspoti%3A%2F%2Fcallback"
+    assert body == expected, f"Form encoding mismatch: got {body}, expected {expected}"
+    print("PASSED: Form URL encoding logic and reserved character escaping verified.")
+
 def test_lrc_regex():
-    print("[3] Validating LRC lyrics regex...")
+    print("[4] Validating LRC lyrics regex...")
     pattern = re.compile(r"^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$")
     sample = "[01:23.45] Hello World"
     m = pattern.match(sample)
@@ -101,7 +123,7 @@ def test_lrc_regex():
     print("PASSED: LRC timestamp regex and calculation verified.")
 
 def test_2026_spotify_constraints():
-    print("[4] Validating 2026 Spotify constraint rules in Swift code...")
+    print("[5] Validating 2026 Spotify constraint rules in Swift code...")
     with open("ios/Packages/MyspotiNetwork/Sources/MyspotiNetwork/Endpoints/SpotifyEndpoint.swift", "r", encoding="utf-8") as f:
         content = f.read()
         assert "limit\", value: \"10\"" in content, "Search limit must be hardcoded to 10"
@@ -110,7 +132,7 @@ def test_2026_spotify_constraints():
     print("PASSED: 2026 Spotify endpoint constraints verified in Swift codebase.")
 
 def test_project_yml():
-    print("[5] Validating XcodeGen project.yml configuration...")
+    print("[6] Validating XcodeGen project.yml configuration...")
     with open("ios/project.yml", "r", encoding="utf-8") as f:
         content = f.read()
         assert "MyspotiAudio:" in content, "MyspotiAudio package must be in project.yml"
@@ -123,6 +145,7 @@ def test_project_yml():
 if __name__ == "__main__":
     test_structure()
     test_pkce_logic()
+    test_form_url_encoding()
     test_lrc_regex()
     test_2026_spotify_constraints()
     test_project_yml()
