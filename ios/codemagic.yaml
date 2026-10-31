@@ -24,7 +24,7 @@ workflows:
           xcodebuild test \
             -project Myspoti.xcodeproj \
             -scheme Myspoti \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
       - name: Build for Generic iOS Device
@@ -44,6 +44,7 @@ workflows:
             -project Myspoti.xcodeproj \
             -scheme Myspoti \
             -configuration Release \
+            -destination 'generic/platform=iOS' \
             -archivePath build/Myspoti.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
@@ -53,7 +54,7 @@ workflows:
           mkdir -p build/Payload
           cp -r build/Myspoti.xcarchive/Products/Applications/Myspoti.app build/Payload/
           cd build
-          zip -r Myspoti.ipa Payload
+          zip -qr Myspoti.ipa Payload
     artifacts:
       - ios/build/Myspoti.ipa
       - ios/build/Myspoti.xcarchive
