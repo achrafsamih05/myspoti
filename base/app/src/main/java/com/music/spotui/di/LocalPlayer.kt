@@ -61,7 +61,7 @@ object LocalPlayer {
     }
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private fun build(main: Boolean): ExoPlayer = ExoPlayer.Builder(Graph.app)
+    private fun build(main: Boolean): ExoPlayer = ExoPlayer.Builder(Graph.app, Renderers)
         // The fading-out copy of a crossfade owns neither the audio focus nor the noisy-audio pause:
         // the main player has them and the fade follows its play state.
         .setAudioAttributes(audioAttributes, main && !mirrorActive)
@@ -70,6 +70,37 @@ object LocalPlayer {
         .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
             com.music.spotui.data.offline.OfflineCrypto.Factory(Graph.app)).setLoadErrorHandlingPolicy(NoAudioNotRetried))
         .build()
+        // The speed and the silence skipping of the settings (the fading-out copy too: both are heard).
+        .also(::tune)
+
+    /**
+     * The default renderers, with the equalizer in the audio chain (each player its own, see
+     * EqualizerProcessor), ahead of the silence skipping and the speed the sink adds after it.
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private object Renderers : androidx.media3.exoplayer.DefaultRenderersFactory(Graph.app) {
+        override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink =
+            androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                .setAudioProcessors(arrayOf(EqualizerProcessor()))
+                .build()
+    }
+
+    private fun tune(p: ExoPlayer) {
+        val pref = com.music.spotui.data.preferences.EqualizerPref
+        if (p.playbackParameters.speed != pref.speed) p.playbackParameters = androidx.media3.common.PlaybackParameters(pref.speed)
+        if (p.skipSilenceEnabled != pref.skipSilence) p.skipSilenceEnabled = pref.skipSilence
+    }
+
+    /** The speed or the silence skipping changed in the settings: the song playing (and a fade) takes it now. */
+    fun applyPlayback() {
+        exo?.let(::tune); outgoing?.let(::tune)
+        log("speed ${rate()}×, skip silences ${if (com.music.spotui.data.preferences.EqualizerPref.skipSilence) "on" else "off"}")
+    }
+
+    /** The speed the local player plays at (the settings', 1 by default). */
+    fun rate(): Float = com.music.spotui.data.preferences.EqualizerPref.speed
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun player(): ExoPlayer = exo ?: build(true).also { p ->
@@ -230,6 +261,25 @@ object LocalPlayer {
         prefetchNext(p)
     }
 
+    /**
+     * The song playing opened again where it is: its audio is read anew from the answer kept for it
+     * (another source was picked for it in the player, see SongPlayer.switchSource). The queue, the
+     * shuffle, the repeat and play or pause stay. False: nothing an extension streams plays here.
+     */
+    fun reopen(): Boolean {
+        val p = exo ?: return false
+        if (CastPlayback.active || !active.value) return false
+        if (p.currentMediaItem?.localConfiguration?.uri?.scheme != com.music.spotui.extensions.ExtensionAudio.SCHEME) return false
+        if (outgoing != null) endFade()
+        val at = p.currentPosition
+        log("${current()?.title}: another source picked, opened again at $at ms")
+        errors.played()
+        p.stop()
+        p.seekTo(p.currentMediaItemIndex, at)
+        p.prepare()
+        return true
+    }
+
     /** The downloads deleted during this session, by file: the song each one is (see [downloadsDeleted]). */
     private val deletedDownloads = HashMap<String, com.music.spotui.data.entity.SongsModel>()
 
@@ -315,9 +365,10 @@ object LocalPlayer {
 
     /**
      * [startMs]: where the song at [index] starts (a resume). [continues]: the extensions play the
-     * queue, it goes on after its last song as Spotify's does (see continueIfLast).
+     * queue, it goes on after its last song as Spotify's does (see continueIfLast). [paused]: the song
+     * is put there paused (another source picked for it while it was paused), the user's play starts it.
      */
-    fun play(list: List<LocalTrack>, index: Int, shuffle: Boolean = false, context: String? = null, contextUri: String = "", startMs: Long = 0L, continues: Boolean = false) {
+    fun play(list: List<LocalTrack>, index: Int, shuffle: Boolean = false, context: String? = null, contextUri: String = "", startMs: Long = 0L, continues: Boolean = false, paused: Boolean = false) {
         if (list.isEmpty()) return
         // Another song picked: repeat once was for the song left.
         val shown = SongPlayer.nowPlaying.value.uri.substringAfterLast(':')
@@ -345,10 +396,12 @@ object LocalPlayer {
         replaying = null
         repeat = SongPlayer.repeatMode.value
         applyRepeat(p)
+        // Paused before it loads: a player left playing by a song before never starts this one.
+        if (paused) p.pause()
         p.setMediaItems(all.map(::item), index.coerceIn(0, list.lastIndex), startMs.coerceAtLeast(0L))
         p.prepare()
         if (shuffle) setShuffle(true)
-        p.play()
+        if (!paused) p.play()
         continueIfLast(p)
     }
 
@@ -891,6 +944,8 @@ object LocalPlayer {
     fun audioFormat(): androidx.media3.common.Format? = if (CastPlayback.active) null else exo?.audioFormat
     /** The length the player knows of the audio itself (null: not known), never Spotify's. */
     fun knownLength(): Long? = if (CastPlayback.active) null else exo?.duration?.takeIf { it != C.TIME_UNSET && it > 0 }
+    /** How far ahead of the position the song is loaded, ms (null: nothing playing here); read by "Stats for nerds" only. */
+    fun bufferedAheadMs(): Long? = if (CastPlayback.active) null else exo?.let { (it.bufferedPosition - it.currentPosition).coerceAtLeast(0L) }
     fun current(): LocalTrack? = exo?.currentMediaItemIndex?.let { tracks.getOrNull(it) }
 
     /**

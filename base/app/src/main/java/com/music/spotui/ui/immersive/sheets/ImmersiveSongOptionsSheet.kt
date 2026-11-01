@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Translate
@@ -28,7 +29,9 @@ import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -88,6 +91,12 @@ fun ImmersiveSongOptionsSheet(
     var showSpeed by remember { mutableStateOf(false) }
     var showMeaning by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
+    var showNerd by remember { mutableStateOf(false) }
+    var showQuality by remember { mutableStateOf(false) }
+    var showDevices by remember { mutableStateOf(false) }
+    if (showQuality) { com.music.spotui.ui.components.QualitySheet(onDismiss = { showQuality = false; onDismiss() }); return }
+    if (showDevices) { com.music.spotui.ui.components.DevicesSheet(onDismiss = { showDevices = false; onDismiss() }); return }
+    if (showNerd) { com.music.spotui.ui.components.StatsForNerdsSheet(onDismiss = { showNerd = false; onDismiss() }); return }
     if (showSources) { com.music.spotui.ui.components.LyricsSourceSheet(onDismiss = { showSources = false; onDismiss() }); return }
     if (showCredits) { CreditsSheet(song = song, onDismiss = { showCredits = false; onDismiss() }); return }
     if (showMeaning) {
@@ -300,6 +309,13 @@ fun ImmersiveSongOptionsSheet(
         if (nowPlaying && song.url.startsWith("episode:")) {
             ImmersiveSheetRow(Icons.Rounded.Speed, stringResource(R.string.playback_speed)) { showSpeed = true }
         }
+        // The app's own playback (extensions, downloads, files): its equalizer, speed and silences.
+        if (nowPlaying && com.music.spotui.di.LocalPlayer.active.value) {
+            ImmersiveSheetRow(Icons.Rounded.GraphicEq, stringResource(R.string.equalizer_title)) {
+                onDismiss()
+                navController.navigate(com.music.spotui.ui.navigation.Routes.Equalizer.route)
+            }
+        }
         ImmersiveSheetRow(Icons.Rounded.Share, stringResource(R.string.context_menu_share), enabled = hasId) {
             SpotifyCode.show(ShareTarget("spotify:track:${song.spotifyTrackId}", song.title, song.singer, song.coverUri))
             onDismiss()
@@ -310,6 +326,14 @@ fun ImmersiveSongOptionsSheet(
                 stringResource(R.string.context_menu_sleep_timer),
                 tint = if (SongPlayer.sleepEndsAt.value != null) LocalImmersiveSheetTint.current.accent else null,
             ) { showSleep = true }
+            // The player's source line and capsule are turned off: their sheets are here instead.
+            if (!com.music.spotui.data.preferences.PlayerSourceLinePref.on) {
+                ImmersiveSheetRow(Icons.Rounded.GraphicEq, stringResource(R.string.quality_sheet_title)) { showQuality = true }
+            }
+            if (!com.music.spotui.data.preferences.PlayerCapsulePref.on) {
+                ImmersiveSheetRow(Icons.Rounded.Devices, stringResource(R.string.listen_on)) { showDevices = true }
+            }
+            ImmersiveSheetRow(Icons.Rounded.Analytics, stringResource(R.string.nerd_title)) { showNerd = true }
         }
         // Entries from extensions (menu.items), after the app's own; each names its extension.
         if (hasId) com.music.spotui.extensions.ExtensionMenuEntries(

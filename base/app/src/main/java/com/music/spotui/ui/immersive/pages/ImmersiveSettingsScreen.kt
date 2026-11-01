@@ -211,8 +211,16 @@ private fun PlaybackPage(navController: NavController, open: (SettingsPage) -> U
     var keepPlaying by remember { mutableStateOf(app.myspoti.host.android.PlaybackService.keepsPlayingOnClose(ctx)) }
     var wordSync by remember { mutableStateOf(com.music.spotui.data.preferences.isLyricsWordSync(ctx)) }
     val crossfade = com.music.spotui.data.preferences.CrossfadePref.seconds
+    // The first source of the audio order, when it is an extension announcing settings here:
+    // they show, and Spotify's quality (kept, still used for what Spotify plays) leaves the screen.
+    val registry by com.music.spotui.extensions.Extensions.registry.collectAsStateWithLifecycle()
+    // A source picked in the player for this session leads too ([com.music.spotui.extensions.SessionSource]).
+    val session by com.music.spotui.extensions.Extensions.sessionSource.collectAsStateWithLifecycle()
+    val ext = remember(registry, session) { com.music.spotui.extensions.Extensions.sectionPlacement(app.myspoti.extensions.SettingSection.PLAYBACK) }
+    val extHeader = ext?.let { stringResource(R.string.ext_section_settings, it.name) }
     ImmersivePage(title = stringResource(R.string.settings_section_playback), onBack = back) {
-        immersiveGroup("quality", footerRes = R.string.quality_streaming_detail) {
+        if (ext != null && extHeader != null) extensionSectionGroup(ext, extHeader)
+        if (ext?.hidesAppQuality != true) immersiveGroup("quality", footerRes = R.string.quality_streaming_detail) {
             row { ImmersiveGroupRow(stringResource(R.string.quality_streaming_wifi_title), value = stringResource(label(wifi)), chevron = true, onClick = { open(SettingsPage.StreamingWifi) }) }
             row { ImmersiveGroupRow(stringResource(R.string.quality_streaming_cell_title), value = stringResource(label(cell)), chevron = true, onClick = { open(SettingsPage.StreamingCell) }) }
         }
@@ -238,6 +246,14 @@ private fun PlaybackPage(navController: NavController, open: (SettingsPage) -> U
                     stringResource(R.string.settings_crossfade_title), detail = stringResource(R.string.settings_crossfade_detail),
                     value = if (crossfade == 0) stringResource(R.string.settings_crossfade_off) else stringResource(R.string.settings_crossfade_seconds, crossfade),
                     chevron = true, onClick = { open(SettingsPage.Crossfade) },
+                )
+            }
+            // The local player's equalizer, speed and silence skipping (never Spotify's own songs).
+            row {
+                ImmersiveGroupRow(
+                    stringResource(R.string.equalizer_title), detail = stringResource(R.string.equalizer_settings_detail),
+                    value = if (com.music.spotui.data.preferences.EqualizerPref.enabled) stringResource(com.music.spotui.ui.screens.eqPresetLabel(com.music.spotui.data.preferences.EqualizerPref.preset)) else null,
+                    chevron = true, onClick = { navController.navigate(Routes.Equalizer.route) },
                 )
             }
             row {
@@ -344,14 +360,20 @@ private fun DownloadsPage(navController: NavController, open: (SettingsPage) -> 
     val quality = getDownloadQuality(ctx)
     var ask by remember { mutableStateOf(false) }
     val size = android.text.format.Formatter.formatShortFileSize(ctx, com.music.spotui.data.offline.OfflineStore.totalBytes())
+    // The first extension of the download order, when it announces settings here; its role quality
+    // takes the place of the app's (kept, and still passed to every extension as `quality`).
+    val registry by com.music.spotui.extensions.Extensions.registry.collectAsStateWithLifecycle()
+    val ext = remember(registry) { com.music.spotui.extensions.Extensions.sectionPlacement(app.myspoti.extensions.SettingSection.DOWNLOADS) }
+    val extHeader = ext?.let { stringResource(R.string.ext_section_settings, it.name) }
     ImmersivePage(title = stringResource(R.string.settings_section_downloads), onBack = back) {
-        immersiveGroup("quality", footerRes = R.string.quality_download_detail) {
+        if (ext?.hidesAppQuality != true) immersiveGroup("quality", footerRes = R.string.quality_download_detail) {
             row {
                 ImmersiveGroupRow(stringResource(R.string.quality_download_title),
                     value = stringResource(DownloadChoices.first { it.first == quality }.second), chevron = true,
                     onClick = { open(SettingsPage.DownloadQuality) })
             }
         }
+        if (ext != null && extHeader != null) extensionSectionGroup(ext, extHeader)
         // Where downloads come from: the download-source extensions, in the order they are asked.
         sourcesGroup(app.myspoti.extensions.Action.DOWNLOAD_SOURCE, navController)
         if (com.music.spotui.extensions.Extensions.sources(app.myspoti.extensions.Action.DOWNLOAD_SOURCE).isEmpty()) immersiveGroup("source") {
@@ -500,7 +522,21 @@ private fun DisplayPage(open: (SettingsPage) -> Unit, back: () -> Unit) {
                 ImmersiveSwitchRow(stringResource(R.string.settings_hide_dj_title), checked = com.music.spotui.data.preferences.HideDjPref.on,
                     onChecked = { com.music.spotui.data.preferences.HideDjPref.set(ctx, it) }, detail = stringResource(R.string.settings_hide_dj_detail))
             }
+            if (look == com.music.spotui.data.preferences.Look.CLASSIC) {
+                row {
+                    ImmersiveSwitchRow(stringResource(R.string.settings_player_lyrics_card_title), checked = com.music.spotui.data.preferences.PlayerLyricsCardPref.on,
+                        onChecked = { com.music.spotui.data.preferences.PlayerLyricsCardPref.set(ctx, it) }, detail = stringResource(R.string.settings_player_lyrics_card_detail))
+                }
+            }
+            row {
+                ImmersiveSwitchRow(stringResource(R.string.settings_player_source_title), checked = com.music.spotui.data.preferences.PlayerSourceLinePref.on,
+                    onChecked = { com.music.spotui.data.preferences.PlayerSourceLinePref.set(ctx, it) }, detail = stringResource(R.string.settings_player_source_detail))
+            }
             if (look == com.music.spotui.data.preferences.Look.IMMERSIVE) {
+                row {
+                    ImmersiveSwitchRow(stringResource(R.string.settings_player_capsule_title), checked = com.music.spotui.data.preferences.PlayerCapsulePref.on,
+                        onChecked = { com.music.spotui.data.preferences.PlayerCapsulePref.set(ctx, it) }, detail = stringResource(R.string.settings_player_capsule_detail))
+                }
                 row {
                     ImmersiveSwitchRow(stringResource(R.string.settings_player_modes_title), checked = com.music.spotui.data.preferences.PlayerModesPref.on,
                         onChecked = { com.music.spotui.data.preferences.PlayerModesPref.set(ctx, it) }, detail = stringResource(R.string.settings_player_modes_detail))

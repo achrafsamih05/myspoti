@@ -26,6 +26,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
@@ -221,6 +222,7 @@ fun ImmersivePlayer(
     var showMenu by remember { mutableStateOf(false) }
     var showDevices by remember { mutableStateOf(false) }
     var showQuality by remember { mutableStateOf(false) }
+    var showNerd by remember { mutableStateOf(false) }
     val lyricsOpen = panel == Panel.LYRICS
     val queueOpen = panel == Panel.QUEUE
 
@@ -300,6 +302,7 @@ fun ImmersivePlayer(
                 onOpenDevices = { showDevices = true },
                 onMore = if (navController != null && state.song != null) ({ showMenu = true }) else null,
                 onSource = { showQuality = true },
+                onSourceLong = { showNerd = true },
                 sidePane = sidePane,
             ) else Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 // The handle: always hands its drags to the sheet.
@@ -426,6 +429,7 @@ fun ImmersivePlayer(
                             state = state, actions = actions, tint = tint, scrolls = scrolls, collapse = { p() },
                             onMore = if (navController != null && state.song != null) ({ showMenu = true }) else null,
                             onSource = { showQuality = true },
+                            onSourceLong = { showNerd = true },
                         )
                     }
                 }
@@ -453,6 +457,7 @@ fun ImmersivePlayer(
 
     if (showDevices) DevicesSheet { showDevices = false }
     if (showQuality) com.music.spotui.ui.components.QualitySheet { showQuality = false }
+    if (showNerd) com.music.spotui.ui.components.StatsForNerdsSheet { showNerd = false }
     val song = state.song
     if (showMenu && song != null && navController != null) {
         ImmersiveSongOptionsSheet(
@@ -529,12 +534,14 @@ private fun RowScope.PlayerCredits(
     collapse: () -> Float,
     onMore: (() -> Unit)?,
     onSource: () -> Unit,
+    onSourceLong: () -> Unit = {},
 ) {
     // The header is a fixed HEADER_HEIGHT: the three lines are set tighter, so none is
     // clipped at the bottom. The source line's room is kept from the start (it is only known
     // a moment after the song starts), so its arrival fades in below the title and artist
     // instead of moving them.
     val sourceLabel = com.music.spotui.ui.components.playingSourceLabel()
+    val sourceShown = com.music.spotui.data.preferences.PlayerSourceLinePref.on
     val hasSource = sourceLabel.isNotBlank() && !state.adPlaying
     val sourceAlpha by animateFloatAsState(if (hasSource) 1f else 0f, tween(250), label = "sourceLine")
     val lineH = if (state.adPlaying) 24.sp else 22.sp
@@ -595,7 +602,7 @@ private fun RowScope.PlayerCredits(
         }
         // What the sound is when Myspoti's own player plays it (an extension's stream, a
         // download); a tap opens what plays and its quality. Same state as the Classic player.
-        if (!state.adPlaying) Text(
+        if (!state.adPlaying && sourceShown) Text(
             text = sourceLabel.ifEmpty { " " },
             style = Immersive.Caption.copy(lineHeight = 14.sp),
             color = tint.copy(alpha = 0.45f),
@@ -604,7 +611,7 @@ private fun RowScope.PlayerCredits(
             modifier = Modifier
                 .graphicsLayer { alpha = sourceAlpha }
                 .then(
-                    if (hasSource) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onSource)
+                    if (hasSource) Modifier.combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onLongClick = onSourceLong, onClick = onSource)
                     else Modifier,
                 ),
         )
@@ -694,6 +701,7 @@ private fun LandscapePlayer(
     onOpenDevices: () -> Unit,
     onMore: (() -> Unit)?,
     onSource: () -> Unit,
+    onSourceLong: () -> Unit = {},
     sidePane: Boolean = false,
 ) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -753,7 +761,7 @@ private fun LandscapePlayer(
                 val showVolume = maxHeight >= LANDSCAPE_VOLUME_MIN_HEIGHT
                 Column(Modifier.widthIn(max = PLAYER_MAX_WIDTH).verticalScroll(rememberScrollState())) {
                     Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-                        PlayerCredits(state, actions, tint, scrolls = true, collapse = { 0f }, onMore = onMore, onSource = onSource)
+                        PlayerCredits(state, actions, tint, scrolls = true, collapse = { 0f }, onMore = onMore, onSource = onSource, onSourceLong = onSourceLong)
                     }
                     Spacer(Modifier.height(8.dp))
                     PlayerControlsBlock(
