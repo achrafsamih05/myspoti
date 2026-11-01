@@ -1,6 +1,6 @@
 workflows:
-  ios-build-and-test:
-    name: Myspoti iOS – Build and Test
+  simulator-workflow:
+    name: Myspoti iOS – Simulator Preview (Quick Launch)
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -25,6 +25,57 @@ workflows:
             -project Myspoti.xcodeproj \
             -scheme Myspoti \
             -destination "platform=iOS Simulator,name=iPhone 17,OS=26.5" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build for Simulator Preview
+        script: |
+          cd ios
+          xcodebuild build \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+    artifacts:
+      - /Users/builder/Library/Developer/Xcode/DerivedData/**/*.app
+
+  ios-build-and-test:
+    name: Myspoti iOS – Build, Test & Device Release (.ipa)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen
+      - name: Generate Xcode Project via XcodeGen
+        script: |
+          cd ios
+          xcodegen generate
+      - name: Resolve Swift Package Dependencies
+        script: |
+          cd ios
+          xcodebuild -resolvePackageDependencies -project Myspoti.xcodeproj -scheme Myspoti
+      - name: Execute Unit Test Suite
+        script: |
+          cd ios
+          xcodebuild test \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -destination "platform=iOS Simulator,name=iPhone 17,OS=26.5" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build for Simulator Preview
+        script: |
+          cd ios
+          xcodebuild build \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -sdk iphonesimulator \
+            -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
       - name: Build for Generic iOS Device
@@ -56,6 +107,6 @@ workflows:
           cd build
           zip -qr Myspoti.ipa Payload
     artifacts:
+      - /Users/builder/Library/Developer/Xcode/DerivedData/**/*.app
       - ios/build/Myspoti.ipa
       - ios/build/Myspoti.xcarchive
-

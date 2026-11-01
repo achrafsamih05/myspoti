@@ -91,18 +91,21 @@ targets:
 
 ## 4. Codemagic Cloud Build Pipeline (`codemagic.yaml`)
 
-Codemagic compiles the app on cloud Apple Silicon macOS machines.
+Codemagic compiles the app on cloud Apple Silicon macOS machines. The project provides two dedicated workflows:
 
-### 4.1 Build Workflow
+1. **`simulator-workflow` (Quick Launch)**: Compiles `Myspoti.app` targeting the iOS Simulator (`-sdk iphonesimulator`) and exports `/Users/builder/Library/Developer/Xcode/DerivedData/**/*.app`. Codemagic surfaces a **Quick Launch** button in the build overview allowing you to preview and interact with the app directly in an online browser-based iOS simulator or download the `.app` bundle.
+2. **`ios-build-and-test` (Full Release & Sideloading)**: Executes XCTest, builds the simulator preview, builds the generic `arm64` device binary, archives the app, and packages an installable `Myspoti.ipa` for sideloading.
+
+### 4.1 Build Workflows Specification
 
 ```yaml
 workflows:
-  ios-build-and-test:
-    name: Myspoti iOS – Build and Test
+  simulator-workflow:
+    name: Myspoti iOS – Simulator Preview (Quick Launch)
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
-      xcode: 15.4
+      xcode: latest
       cocoapods: default
     scripts:
       - name: Install XcodeGen
@@ -122,7 +125,58 @@ workflows:
           xcodebuild test \
             -project Myspoti.xcodeproj \
             -scheme Myspoti \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination "platform=iOS Simulator,name=iPhone 17,OS=26.5" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build for Simulator Preview
+        script: |
+          cd ios
+          xcodebuild build \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+    artifacts:
+      - /Users/builder/Library/Developer/Xcode/DerivedData/**/*.app
+
+  ios-build-and-test:
+    name: Myspoti iOS – Build, Test & Device Release (.ipa)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen
+      - name: Generate Xcode Project via XcodeGen
+        script: |
+          cd ios
+          xcodegen generate
+      - name: Resolve Swift Package Dependencies
+        script: |
+          cd ios
+          xcodebuild -resolvePackageDependencies -project Myspoti.xcodeproj -scheme Myspoti
+      - name: Execute Unit Test Suite
+        script: |
+          cd ios
+          xcodebuild test \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -destination "platform=iOS Simulator,name=iPhone 17,OS=26.5" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Build for Simulator Preview
+        script: |
+          cd ios
+          xcodebuild build \
+            -project Myspoti.xcodeproj \
+            -scheme Myspoti \
+            -sdk iphonesimulator \
+            -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
       - name: Build for Generic iOS Device
@@ -154,6 +208,7 @@ workflows:
           cd build
           zip -qr Myspoti.ipa Payload
     artifacts:
+      - /Users/builder/Library/Developer/Xcode/DerivedData/**/*.app
       - ios/build/Myspoti.ipa
       - ios/build/Myspoti.xcarchive
 ```
