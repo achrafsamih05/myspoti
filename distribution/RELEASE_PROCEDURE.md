@@ -95,3 +95,4 @@ Once published, GitHub automatically provides these permanent download URLs:
   `https://github.com/achrafsamih05/myspoti/releases/download/v1.0.0/Myspoti.ipa`
 - **Public Distribution Website**:
   `https://achrafsamih05.github.io/myspoti/`
+

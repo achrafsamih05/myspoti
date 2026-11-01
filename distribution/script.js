@@ -190,3 +190,4 @@ async function fetchChecksumText(url, targetElement) {
     // Ignore, keep fallback
   }
 }
+

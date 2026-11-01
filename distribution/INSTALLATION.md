@@ -141,3 +141,4 @@ Before you can open Myspoti for the first time, iOS requires two standard securi
 
 - **No Credentials Handled by Myspoti**: Myspoti and its distribution system never request, store, or transmit your Apple ID or password. Sideloading tools communicate directly with Apple's authentication servers.
 - **Open Source**: Myspoti is licensed under **GPL-3.0**. The source code is publicly inspectable at [https://github.com/achrafsamih05/myspoti](https://github.com/achrafsamih05/myspoti).
+
